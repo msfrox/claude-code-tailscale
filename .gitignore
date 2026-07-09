@@ -1,0 +1,6 @@
+# Never commit real secrets / local state
+.env
+node-home/
+workspace/
+tailscale-state/
+*.log

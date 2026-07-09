@@ -1,0 +1,6 @@
+.git
+*.md
+.env
+node-home/
+workspace/
+tailscale-state/

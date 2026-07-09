@@ -1,0 +1,52 @@
+# Claude Code + Tailscale — build & run.
+#
+# Usage on the Unraid host (or any Docker host):
+#   cd /path/to/docker/claude-code
+#   docker compose build          # build the image
+#   docker compose up -d          # start it
+#
+# In Portainer: Stacks -> Add stack -> paste this file. Set TS_AUTHKEY (and
+# optionally TS_HOSTNAME) as stack environment variables for a first-time,
+# unattended join. After the first successful login the auth key is no longer
+# required because /var/lib/tailscale is a persistent volume.
+
+services:
+  claude-code:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: claude-code-tailscale:latest
+    container_name: claude-code
+    hostname: claude-code
+    restart: unless-stopped
+
+    # Tailscale needs NET_ADMIN + the TUN device to create tailscale0.
+    # (NET_RAW is part of Docker's default capability set already.)
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+    environment:
+      TS_HOSTNAME: ${TS_HOSTNAME:-claude-code}
+      # Set TS_AUTHKEY in a .env file or the Portainer stack env for first join.
+      # Leave empty to authenticate interactively via the printed login URL.
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+
+    volumes:
+      # Tailscale identity/state — MUST persist so you don't re-auth every start.
+      - tailscale-state:/var/lib/tailscale
+      # Home dir — holds Claude Code config, credentials, history.
+      - node-home:/home/node
+      # Project working area. Defaults to a ./projects folder next to this file;
+      # set WORKSPACE_PATH (e.g. to a NAS/array path) to store projects on disk.
+      - ${WORKSPACE_PATH:-./projects}:/workspace
+
+# tailscale-state and node-home are named volumes above. To pin them to specific
+# host paths (e.g. to migrate an existing container's identity and config), set
+# them as bind mounts instead, e.g.:
+#   - ${TAILSCALE_PATH:-tailscale-state}:/var/lib/tailscale
+#   - ${HOME_PATH:-node-home}:/home/node
+volumes:
+  tailscale-state:
+  node-home:
