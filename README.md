@@ -58,7 +58,10 @@ image above.
 2. **Name:** `claude-code`
 3. **Repository:** `ghcr.io/<owner>/claude-code-tailscale:latest`
 4. Switch the template to **Advanced view** (toggle, top-right) and set
-   **Extra Parameters:** `--cap-add NET_ADMIN`
+   **Extra Parameters:** `--cap-add NET_ADMIN --hostname claude-code`
+   (the `--hostname` is what names this machine in Tailscale **and** in the
+   Remote Control environment list — without it Docker uses the random container
+   ID like `8168f4369266`, which can't be renamed on a running container.)
 5. **Add** a **Device:** value `/dev/net/tun`
 6. **Add** these **Path** mappings (Container path → host path):
    | Container path        | Host path (example)                              |
@@ -254,6 +257,14 @@ and `setup-token` logins are not eligible), and a Claude Code that talks to
 The entrypoint runs `claude remote-control` as the `node` user under a small
 supervisor loop, so it restarts automatically after the ~10-minute network-idle
 timeout or any crash. Its output goes to **`/home/node/remote-control.log`**.
+
+**Naming what you see in the app.** The app shows an *environment* (the machine)
+containing *sessions*. The environment is labelled with the container's
+**hostname**, so set one (`--hostname claude-code`, or `hostname:` in compose) or
+it shows the random container ID. Individual sessions are labelled by `RC_NAME`
+(the `--name`), and new sessions you spawn from the app are named from your first
+prompt. The hostname can only be set when the container is created, not on a
+running container.
 
 > Because Remote Control refuses an untrusted directory and offers no flag to
 > accept the trust dialog non-interactively, the entrypoint pre-marks `RC_DIR`
