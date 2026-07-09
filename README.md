@@ -29,10 +29,83 @@ would be lost on any recreate. This image bakes them in permanently.
 - `entrypoint.sh` — starts tailscaled + joins the tailnet with SSH enabled
 - `docker-compose.yml` — build + run with the right caps, device, and volumes
 - `.env.example` — copy to `.env` and fill in for an unattended first join
+- `.github/workflows/docker-publish.yml` — builds + pushes the image to GHCR
 
-## Build & run
+## The image (GHCR)
 
-### Option A — Unraid / host shell (docker compose)
+A GitHub Actions workflow builds this image and publishes it to the GitHub
+Container Registry on every push to `main`:
+
+```
+ghcr.io/<owner>/claude-code-tailscale:latest
+```
+
+> **One-time:** after the first workflow run, open the repo's **Packages →
+> package settings** and set the package visibility to **Public** so hosts
+> (Unraid, etc.) can `docker pull` it without credentials.
+
+You can either pull that prebuilt image (Options A/B below) or build locally
+(Options C/D).
+
+## Deploy
+
+### Option A — Unraid native Docker manager (recommended on Unraid)
+
+Unraid's Docker manager pulls a prebuilt image from a registry, so use the GHCR
+image above.
+
+1. **Docker** tab → **Add Container**.
+2. **Name:** `claude-code`
+3. **Repository:** `ghcr.io/<owner>/claude-code-tailscale:latest`
+4. Switch the template to **Advanced view** (toggle, top-right) and set
+   **Extra Parameters:** `--cap-add NET_ADMIN`
+5. **Add** a **Device:** value `/dev/net/tun`
+6. **Add** these **Path** mappings (Container path → host path):
+   | Container path        | Host path (example)                              |
+   |-----------------------|--------------------------------------------------|
+   | `/var/lib/tailscale`  | `/mnt/user/appdata/claude-code/tailscale`        |
+   | `/home/node`          | `/mnt/user/appdata/claude-code/home`             |
+   | `/workspace`          | your projects path, e.g. `/mnt/user/Projects`    |
+7. **Add** these **Variables**:
+   | Name         | Value                                              |
+   |--------------|----------------------------------------------------|
+   | `TS_HOSTNAME`| `claude-code`                                      |
+   | `TS_AUTHKEY` | a Tailscale auth key (first join only — see below) |
+8. **Apply.** Watch the container log for the tailnet join; if you left
+   `TS_AUTHKEY` blank the log prints a login URL to authorize once. After the
+   first join the identity lives in the `/var/lib/tailscale` mapping and the key
+   is no longer needed.
+
+> No published ports are needed — access is over Tailscale SSH. Network type can
+> stay **bridge**; Tailscale runs inside the container via `/dev/net/tun`.
+>
+> **Updating:** click the container → **Force update** to pull a newer image.
+> Because Node/system packages live in the image, that's how you move versions.
+
+### Option B — Portainer **Git stack**
+
+Portainer clones the repo, builds from the `Dockerfile`, and runs the stack.
+
+1. **Stacks → Add stack →** name it `claude-code`.
+2. Build method: **Repository**.
+3. **Repository URL:** `https://github.com/<owner>/claude-code-tailscale`
+4. **Repository reference:** `refs/heads/main`
+5. **Compose path:** `docker-compose.yml`
+6. **Public repo → leave Authentication OFF.** (Only a **private** fork needs a
+   token: toggle Authentication ON, username = your GitHub user, password = a
+   fine-grained PAT with *Contents: Read-only* on that repo.)
+7. **Environment variables:**
+   | Name            | Value                                            | Required |
+   |-----------------|--------------------------------------------------|----------|
+   | `TS_AUTHKEY`    | a Tailscale auth key (see below)                 | first join only |
+   | `TS_HOSTNAME`   | `claude-code`                                    | optional |
+   | `WORKSPACE_PATH`| host path for projects, e.g. `/mnt/.../Projects` | optional |
+8. **Deploy the stack.**
+
+Generate `TS_AUTHKEY` at the Tailscale admin console → **Settings → Keys →
+Generate auth key**. It's only needed for the **first** authenticated start.
+
+### Option C — host shell (docker compose)
 
 ```bash
 cd /path/to/docker/claude-code        # where these files live
@@ -42,71 +115,7 @@ docker compose up -d
 docker compose logs -f                # watch it join the tailnet
 ```
 
-If you did **not** set `TS_AUTHKEY`, the logs print a Tailscale login URL —
-open it once to authorize the node. After that the auth is stored in the
-`tailscale-state` volume and never needed again.
-
-### Option B — Portainer **Git stack** (recommended)
-
-This is the clean way: Portainer pulls the repo, builds the image from the
-`Dockerfile`, and runs the stack — no copying files onto the host. If your fork
-is **private**, you first tell Portainer how to authenticate to GitHub (skip the
-token step for a public repo).
-
-#### 1. (Private repo only) Make a GitHub access token
-
-- GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained
-  tokens → Generate new token**.
-- **Repository access:** Only select repositories → your fork of this repo.
-- **Permissions:** Repository → **Contents: Read-only** (that's all Portainer
-  needs to clone).
-- Set an expiry you're comfortable with and generate it. Copy the
-  `github_pat_…` value.
-
-  > A classic token with the `repo` scope also works if you prefer.
-
-#### 2. Create the stack in Portainer
-
-1. **Stacks → Add stack →** name it e.g. `claude-code`.
-2. Build method: **Repository**.
-3. **Repository URL:** `https://github.com/<your-user>/<your-fork>`
-4. **Repository reference:** `refs/heads/main`
-5. **Compose path:** `docker-compose.yml`
-6. (Private repo only) Toggle **Authentication ON**:
-   - **Username:** your GitHub username
-   - **Password / token:** the `github_pat_…` token from step 1.
-7. (Optional) Enable **Automatic updates → polling** so Portainer re-pulls and
-   redeploys when you push changes to `main`.
-
-#### 3. Set the environment variables
-
-In the stack's **Environment variables** section add:
-
-| Name            | Value                                          | Required |
-|-----------------|------------------------------------------------|----------|
-| `TS_AUTHKEY`    | a Tailscale auth key (see below)               | first join only |
-| `TS_HOSTNAME`   | `claude-code` (or your preferred tailnet name) | optional |
-| `WORKSPACE_PATH`| host path for projects, e.g. `/mnt/.../Projects` | optional |
-
-Generate `TS_AUTHKEY` at the Tailscale admin console → **Settings → Keys →
-Generate auth key** (reusable/ephemeral as you prefer). It's only needed for the
-**first** authenticated start; afterwards the identity lives in the
-`tailscale-state` volume and the key can be removed.
-
-#### 4. Deploy
-
-Click **Deploy the stack**. Portainer clones the repo, builds
-`claude-code-tailscale:latest` from the `Dockerfile`, and starts the container
-with the `NET_ADMIN` cap, `/dev/net/tun`, and the volumes from
-`docker-compose.yml`. Watch the container logs for the Tailscale join; if you
-didn't set `TS_AUTHKEY`, the log prints a login URL to authorize once.
-
-> **Updating later:** push a commit to `main`, then in Portainer either wait for
-> polling (if enabled) or hit **Pull and redeploy** on the stack. To rebuild on a
-> newer Node base image, use **Re-pull image and redeploy** / enable
-> `--pull` behavior so the `FROM node:24-bookworm` layer refreshes.
-
-### Option C — plain docker build
+### Option D — plain docker build & run
 
 ```bash
 docker build -t claude-code-tailscale:latest .
@@ -138,6 +147,76 @@ volumes:
 **Migrating an existing `/var/lib/tailscale` keeps that node's identity**, so it
 stays the same tailnet machine with the same IP and no re-auth. Migrating
 `/home/node` keeps your Claude Code login and config.
+
+## Access methods
+
+By default you reach the container **directly over Tailscale SSH**: the
+container is its own tailnet node (via its bundled `tailscaled`), and
+`tailscale up --ssh` lets you `ssh claude-code` from any device on your tailnet
+with no SSH keys to manage — the tailnet identity authenticates you. This is the
+slickest option, especially from a phone, and is what this image ships with.
+
+If you'd rather **not** run Tailscale inside the container (e.g. your host
+already runs Tailscale and you don't want a second tailnet node), here are the
+main alternatives and their trade-offs.
+
+### A) Reuse the host's Tailscale — SSH to host, then `docker exec`
+
+No Tailscale and no SSH server inside the container at all. Reach the host over
+its existing tailnet, then step in:
+
+```bash
+ssh your-unraid-host          # over the host's Tailscale
+docker exec -it claude-code bash
+claude
+```
+
+- **Pros:** simplest image (drop `tailscaled`, the `NET_ADMIN` cap, and
+  `/dev/net/tun`); one tailnet identity; nothing to authenticate per-container.
+- **Cons:** two hops (less slick from a phone); needs host SSH reachable over the
+  tailnet.
+
+To use this, you can base the container on a plain `node:24-bookworm` without the
+Tailscale bits — or keep this image and just ignore its Tailscale layer.
+
+### B) Real SSH server on a published port (bound to the tailnet)
+
+Add `openssh-server` to the image, run `sshd`, and publish it **bound to the
+host's Tailscale IP** so it isn't exposed on your LAN:
+
+```yaml
+# docker-compose.yml
+ports:
+  - "100.x.y.z:2222:22"     # host's tailnet IP ONLY — not 0.0.0.0
+```
+
+Then `ssh -p 2222 node@100.x.y.z`. You manage `authorized_keys` yourself.
+
+- **Pros:** direct-ish access without the container being its own tailnet node;
+  works as the entry point for a Cloudflare Tunnel (option C).
+- **Cons:** you run and secure `sshd` (host keys, `authorized_keys`); **binding
+  to `0.0.0.0` by mistake exposes SSH to your whole LAN** — always pin the
+  tailnet IP.
+
+### C) Cloudflare Tunnel — a Tailscale-independent backup path
+
+Because Tailscale SSH does not expose a normal TCP port, `cloudflared` cannot
+tunnel to it. Give it a real `sshd` port (option B) first, then run `cloudflared`
+**on the host** (Unraid has a plugin/container for it) pointing at that port,
+behind **Cloudflare Access**:
+
+- Create a Zero Trust **Access application** for the SSH hostname and an Access
+  policy (who may connect).
+- Cloudflare's browser-based terminal lets you reach it **from a phone with no
+  client installed** — a genuinely separate path that still works if Tailscale
+  is down.
+- **Cons:** more setup (Cloudflare Zero Trust + Access); keep it behind Access so
+  you're not publishing SSH to the internet.
+
+> **Recommendation:** keep Tailscale SSH (the default) as your primary — it's the
+> most convenient. If you want redundancy, add option C **alongside** it (run
+> `cloudflared` on the host) rather than removing Tailscale, so you have two
+> independent ways in.
 
 ## Required container settings (don't drop these)
 
