@@ -33,6 +33,16 @@ services:
       # Leave empty to authenticate interactively via the printed login URL.
       TS_AUTHKEY: ${TS_AUTHKEY:-}
 
+      # --- Claude Code Remote Control (optional) ------------------------------
+      # Set RC_ENABLE=1 to expose this container as a live session at
+      # claude.ai/code and in the Claude mobile app (Code tab), drivable from
+      # your phone or a browser. Outbound HTTPS only — no ports to publish.
+      # Requires a one-time `claude` login inside the container (SSH in, run
+      # `claude`, then /login); the login persists in the /home/node volume.
+      RC_ENABLE: ${RC_ENABLE:-}
+      RC_NAME: ${RC_NAME:-${TS_HOSTNAME:-claude-code}}
+      RC_DIR: ${RC_DIR:-/workspace}
+
     volumes:
       # Tailscale identity/state — MUST persist so you don't re-auth every start.
       - tailscale-state:/var/lib/tailscale

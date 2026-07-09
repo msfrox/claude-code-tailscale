@@ -71,6 +71,7 @@ image above.
    |--------------|----------------------------------------------------|
    | `TS_HOSTNAME`| `claude-code`                                      |
    | `TS_AUTHKEY` | a Tailscale auth key (first join only — see below) |
+   | `RC_ENABLE`  | `1` to enable Remote Control (optional — see below)|
 8. **Apply.** Watch the container log for the tailnet join; if you left
    `TS_AUTHKEY` blank the log prints a login URL to authorize once. After the
    first join the identity lives in the `/var/lib/tailscale` mapping and the key
@@ -100,6 +101,7 @@ Portainer clones the repo, builds from the `Dockerfile`, and runs the stack.
    | `TS_AUTHKEY`    | a Tailscale auth key (see below)                 | first join only |
    | `TS_HOSTNAME`   | `claude-code`                                    | optional |
    | `WORKSPACE_PATH`| host path for projects, e.g. `/mnt/.../Projects` | optional |
+   | `RC_ENABLE`     | `1` to enable Remote Control (see below)         | optional |
 8. **Deploy the stack.**
 
 Generate `TS_AUTHKEY` at the Tailscale admin console → **Settings → Keys →
@@ -217,6 +219,47 @@ behind **Cloudflare Access**:
 > most convenient. If you want redundancy, add option C **alongside** it (run
 > `cloudflared` on the host) rather than removing Tailscale, so you have two
 > independent ways in.
+
+## Remote Control (drive from your phone or a browser)
+
+[Remote Control](https://code.claude.com/docs/en/remote-control) makes this
+container appear as a **live session** at
+[claude.ai/code](https://claude.ai/code) and in the Claude mobile app's **Code**
+tab, so you can steer it from your phone or any browser. Claude keeps running
+**inside the container** — your files, MCP servers, and tools stay local, and
+the connection is **outbound HTTPS only**, so no ports are published.
+
+> This is different from "Claude Code on the web" and the **New cloud
+> environment** dialog in the app: those run on Anthropic's cloud and can't
+> point at your own machine. Remote Control is how a self-hosted container like
+> this one shows up in the apps.
+
+**Requirements:** a claude.ai **Pro/Max/Team/Enterprise** subscription (API keys
+and `setup-token` logins are not eligible), and a Claude Code that talks to
+`api.anthropic.com` directly (no `ANTHROPIC_BASE_URL` override).
+
+**Enable it:**
+
+1. **Log in once.** SSH into the container as `node`, run `claude`, then
+   `/login` and complete the claude.ai sign-in. The login is stored in
+   `/home/node`, so it persists across restarts.
+2. **Set `RC_ENABLE=1`** on the container (compose/`.env`, Portainer stack env,
+   or an Unraid variable) and restart. Optionally set `RC_NAME` (the title shown
+   in the app; defaults to `TS_HOSTNAME`) and `RC_DIR` (the directory it serves;
+   defaults to `/workspace`).
+3. **Connect.** Open [claude.ai/code](https://claude.ai/code) or the Claude app's
+   **Code** tab and pick the session by name — it shows a computer icon with a
+   green dot when online.
+
+The entrypoint runs `claude remote-control` as the `node` user under a small
+supervisor loop, so it restarts automatically after the ~10-minute network-idle
+timeout or any crash. Its output goes to **`/home/node/remote-control.log`**.
+
+> Because Remote Control refuses an untrusted directory and offers no flag to
+> accept the trust dialog non-interactively, the entrypoint pre-marks `RC_DIR`
+> as trusted in the `node` user's `~/.claude.json` at boot (before any `claude`
+> process runs). If you point `RC_DIR` somewhere new, that directory is trusted
+> automatically on the next restart.
 
 ## Required container settings (don't drop these)
 
