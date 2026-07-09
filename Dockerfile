@@ -61,6 +61,22 @@ RUN echo 'node ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/node \
     && chmod 0440 /etc/sudoers.d/node \
     && visudo -c
 
+# ---- Console user consolidation ---------------------------------------------
+# Unraid's WebUI "Console" runs `docker exec` as root, but Tailscale SSH logs in
+# as node. Drop interactive root shells into node so both entry points share one
+# user, one ~/.claude, and one login (avoids a stray /root/.claude identity).
+# Only fires for an interactive root shell; scripts and non-interactive
+# `docker exec <cmd>` are unaffected. Maintenance escape hatch:
+#   docker exec -e STAY_ROOT=1 -it <container> bash
+RUN printf '%s\n' \
+    '' \
+    '# Drop interactive root shells to the node user (Unraid console = docker exec' \
+    '# as root; Tailscale SSH = node). Keeps one user/~/.claude/login.' \
+    'if [ -z "${STAY_ROOT:-}" ] && [ "$(id -u)" = 0 ] && [ -t 0 ] && command -v su >/dev/null 2>&1; then' \
+    '  exec su - node' \
+    'fi' \
+    >> /root/.bashrc
+
 # ---- Claude Code CLI --------------------------------------------------------
 # Install globally, then hand /usr/local to the node user so runtime
 # self-update (npm -g) works without root.

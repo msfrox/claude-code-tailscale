@@ -161,6 +161,12 @@ container is its own tailnet node (via its bundled `tailscaled`), and
 with no SSH keys to manage — the tailnet identity authenticates you. This is the
 slickest option, especially from a phone, and is what this image ships with.
 
+> **One user everywhere.** Tailscale SSH logs you in as `node`, but Unraid's
+> WebUI **Console** runs `docker exec` as `root`. To keep a single user (and a
+> single `~/.claude` login), the image drops interactive root shells into `node`
+> automatically, so the Unraid console behaves like SSH. For a genuine root shell
+> (maintenance), bypass it with `docker exec -e STAY_ROOT=1 -it claude-code bash`.
+
 If you'd rather **not** run Tailscale inside the container (e.g. your host
 already runs Tailscale and you don't want a second tailnet node), here are the
 main alternatives and their trade-offs.
