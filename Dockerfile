@@ -18,6 +18,11 @@ LABEL org.opencontainers.image.title="claude-code-tailscale" \
       org.opencontainers.image.description="Headless Claude Code CLI reachable over Tailscale SSH" \
       org.opencontainers.image.source="https://github.com/anthropics/claude-code"
 
+# Make Unraid's WebUI "Console" open a *bash* shell (its default is `sh`/dash,
+# which doesn't source /root/.bashrc — so the drop-to-node there never fires
+# under sh). With bash, /root/.bashrc runs and the console lands as node.
+LABEL net.unraid.docker.shell="bash"
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # ---- Base packages + third-party apt repos (Tailscale, GitHub CLI) ----------
