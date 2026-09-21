@@ -29,6 +29,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ubuntu-latest ships shellcheck preinstalled, so no extra action/dependency
+      # is needed. Lints only, and doesn't touch build/push below.
+      - name: Lint entrypoint.sh
+        run: shellcheck entrypoint.sh
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
