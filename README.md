@@ -139,19 +139,37 @@ docker run -d --name claude-code --hostname claude-code \
 
 By default `/home/node` and `/var/lib/tailscale` use named volumes, and
 `/workspace` follows `WORKSPACE_PATH`. To pin any of them to specific host paths
-(e.g. an array/cache path, or to migrate an existing container's data), bind
-mount them, e.g.:
+(e.g. an array/cache path, or to migrate an existing container's data), set
+`TAILSCALE_PATH` and/or `HOME_PATH` in `.env` (or the Portainer/Unraid stack
+env):
 
-```yaml
-volumes:
-  - /path/on/host/tailscale:/var/lib/tailscale
-  - /path/on/host/home:/home/node
-  - /path/on/host/projects:/workspace
 ```
+TAILSCALE_PATH=/path/on/host/tailscale
+HOME_PATH=/path/on/host/home
+WORKSPACE_PATH=/path/on/host/projects
+```
+
+Leave either blank to keep using its named volume. If you're building the
+`docker run` command by hand (Option D) instead of compose, pass the same host
+paths directly as `-v` flags.
 
 **Migrating an existing `/var/lib/tailscale` keeps that node's identity**, so it
 stays the same tailnet machine with the same IP and no re-auth. Migrating
 `/home/node` keeps your Claude Code login and config.
+
+## Advanced: extra flags
+
+- **`TS_EXTRA_ARGS`** — extra flags appended to `tailscale up`, on top of the
+  `--ssh --hostname=$TS_HOSTNAME --accept-dns=false` (and `--authkey`, when
+  `TS_AUTHKEY` is set) this image already passes. Useful for e.g.
+  `--advertise-routes=10.0.1.0/24` or `--accept-routes`. Unset by default —
+  nothing extra is appended.
+- **`RC_EXTRA_ARGS`** — extra flags appended to the `claude remote-control`
+  command; see [Remote Control](#remote-control-drive-from-your-phone-or-a-browser)
+  below for the rest of that setup. Unset by default.
+
+Both are word-split and appended unquoted, same as a normal shell command line —
+don't rely on them for values containing spaces.
 
 ## Access methods
 
@@ -254,8 +272,10 @@ and `setup-token` logins are not eligible), and a Claude Code that talks to
    `/home/node`, so it persists across restarts.
 2. **Set `RC_ENABLE=1`** on the container (compose/`.env`, Portainer stack env,
    or an Unraid variable) and restart. Optionally set `RC_NAME` (the title shown
-   in the app; defaults to `TS_HOSTNAME`) and `RC_DIR` (the directory it serves;
-   defaults to `/workspace`).
+   in the app; defaults to `TS_HOSTNAME`), `RC_DIR` (the directory it serves;
+   defaults to `/workspace`), and `RC_EXTRA_ARGS` (extra flags appended to the
+   `claude remote-control` command — see [Advanced: extra
+   flags](#advanced-extra-flags)).
 3. **Connect.** Open [claude.ai/code](https://claude.ai/code) or the Claude app's
    **Code** tab and pick the session by name — it shows a computer icon with a
    green dot when online.

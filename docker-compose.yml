@@ -32,6 +32,8 @@ services:
       # Set TS_AUTHKEY in a .env file or the Portainer stack env for first join.
       # Leave empty to authenticate interactively via the printed login URL.
       TS_AUTHKEY: ${TS_AUTHKEY:-}
+      # Extra flags appended to `tailscale up` (e.g. --advertise-routes=...).
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:-}
 
       # --- Claude Code Remote Control (optional) ------------------------------
       # Set RC_ENABLE=1 to expose this container as a live session at
@@ -42,21 +44,24 @@ services:
       RC_ENABLE: ${RC_ENABLE:-}
       RC_NAME: ${RC_NAME:-${TS_HOSTNAME:-claude-code}}
       RC_DIR: ${RC_DIR:-/workspace}
+      # Extra flags appended to `claude remote-control`.
+      RC_EXTRA_ARGS: ${RC_EXTRA_ARGS:-}
 
     volumes:
       # Tailscale identity/state — MUST persist so you don't re-auth every start.
-      - tailscale-state:/var/lib/tailscale
+      # Defaults to a named volume; set TAILSCALE_PATH to bind-mount a host path
+      # instead (e.g. to migrate an existing container's identity).
+      - ${TAILSCALE_PATH:-tailscale-state}:/var/lib/tailscale
       # Home dir — holds Claude Code config, credentials, history.
-      - node-home:/home/node
+      # Defaults to a named volume; set HOME_PATH to bind-mount a host path
+      # instead (e.g. to migrate an existing container's login/config).
+      - ${HOME_PATH:-node-home}:/home/node
       # Project working area. Defaults to a ./projects folder next to this file;
       # set WORKSPACE_PATH (e.g. to a NAS/array path) to store projects on disk.
       - ${WORKSPACE_PATH:-./projects}:/workspace
 
-# tailscale-state and node-home are named volumes above. To pin them to specific
-# host paths (e.g. to migrate an existing container's identity and config), set
-# them as bind mounts instead, e.g.:
-#   - ${TAILSCALE_PATH:-tailscale-state}:/var/lib/tailscale
-#   - ${HOME_PATH:-node-home}:/home/node
+# tailscale-state and node-home are the default named volumes, used whenever
+# TAILSCALE_PATH / HOME_PATH are left unset above.
 volumes:
   tailscale-state:
   node-home:
